@@ -1,1 +1,134 @@
 
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Security.Cryptography;
+using System.Text;
+
+namespace PasswordManager
+{
+    class Program
+    {
+        private static string PASSWORD_FILE_NAME = "passwords.txt";
+        private static string PASSWORD_FILE_DELIMITER = "|";
+
+        static void Main(string[] args)
+        {
+            Console.WriteLine("Welcome to Wolf Password Manager!");
+
+            while (true)
+            {
+                Console.WriteLine("1. Add a password");
+                Console.WriteLine("2. View all passwords");
+                Console.WriteLine("3. Quit");
+
+                string choice = Console.ReadLine();
+
+                switch (choice)
+                {
+                    case "1":
+                        AddPassword();
+                        break;
+                    case "2":
+                        ViewPasswords();
+                        break;
+                    case "3":
+                        return;
+                    default:
+                        Console.WriteLine("Invalid choice. Please try again.");
+                        break;
+                }
+            }
+        }
+
+        private static void AddPassword()
+        {
+            Console.Write("Enter a description: ");
+            string description = Console.ReadLine();
+
+            Console.Write("Enter a username: ");
+            string username = Console.ReadLine();
+
+            Console.Write("Enter a password: ");
+            string password = Console.ReadLine();
+
+            Console.Write("Enter a PIN to secure your passwords: ");
+            string pin = Console.ReadLine();
+
+            string encryptedPassword = EncryptString(password, pin);
+
+            string passwordLine = $"{description}{PASSWORD_FILE_DELIMITER}{username}{PASSWORD_FILE_DELIMITER}{encryptedPassword}";
+
+            using (StreamWriter writer = new StreamWriter(PASSWORD_FILE_NAME, true))
+            {
+                writer.WriteLine(passwordLine);
+            }
+
+            Console.WriteLine("Password saved successfully!");
+        }
+
+        private static void ViewPasswords()
+        {
+            Console.Write("Enter your PIN to view your passwords: ");
+            string pin = Console.ReadLine();
+
+            if (!IsValidPin(pin))
+            {
+                Console.WriteLine("Invalid PIN. Access denied.");
+                return;
+            }
+
+            Console.WriteLine("Description\tUsername\tPassword");
+            Console.WriteLine("--------------------------------------------------");
+
+            using (StreamReader reader = new StreamReader(PASSWORD_FILE_NAME))
+            {
+                while (!reader.EndOfStream)
+                {
+                    string passwordLine = reader.ReadLine();
+                    string[] passwordFields = passwordLine.Split(new string[] { PASSWORD_FILE_DELIMITER }, StringSplitOptions.None);
+
+                    string description = passwordFields[0];
+                    string username = passwordFields[1];
+                    string encryptedPassword = passwordFields[2];
+
+                    string password = DecryptString(encryptedPassword, pin);
+
+                    Console.WriteLine($"{description}\t{username}\t{password}");
+                }
+            }
+        }
+
+        private static string EncryptString(string plainText, string key)
+        {
+            byte[] keyBytes = Encoding.UTF8.GetBytes(key);
+            byte[] plainTextBytes = Encoding.UTF8.GetBytes(plainText);
+
+            Aes aes = Aes.Create();
+            aes.Key = keyBytes;
+            aes.Mode = CipherMode.CBC;
+
+            MemoryStream memoryStream = new MemoryStream();
+            CryptoStream cryptoStream = new CryptoStream(memoryStream, aes.CreateEncryptor(), CryptoStreamMode.Write);
+            cryptoStream.Write(plainTextBytes, 0, plainTextBytes.Length);
+            cryptoStream.FlushFinalBlock();
+
+            byte[] encryptedBytes = memoryStream.ToArray();
+
+            memoryStream.Close();
+            cryptoStream.Close();
+
+            return Convert.ToBase64String(encryptedBytes);
+        }
+
+        private static string DecryptString(string encryptedText, string key)
+        {
+            byte[] keyBytes = Encoding.UTF8.GetBytes(key);
+            byte[] encryptedBytes = Convert.FromBase64String(encryptedText);
+
+            Aes aes = Aes.Create();
+            aes.Key = keyBytes;
+            aes.Mode = CipherMode.CBC;
+
+            MemoryStream memoryStream = new MemoryStream(encryptedBytes);
+            CryptoStream cryptoStream = new
